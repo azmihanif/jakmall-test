@@ -20,6 +20,6 @@ server {
 
     location ~ \.php$ {
         include fastcgi.conf;
-        fastcgi_pass ${FASTCGI_PASS};
+        
     }
 }

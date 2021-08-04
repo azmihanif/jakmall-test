@@ -1,0 +1,122 @@
+version: '3.3'
+
+services:
+  image-nginx:
+    build: ./infrastructure/nginx/base
+    image: jakmall/recruitment/cloud-engineer/counter/nginx
+  
+  image-php:
+    build: 
+      context: ./infrastructure/php/base
+      target: php-fpm
+    image: jakmall/recruitment/cloud-engineer/counter/php-fpm
+  
+  image-worker:
+    build:
+      context: ./infrastructure/php/base
+      target: worker
+    image: jakmall/recruitment/cloud-engineer/counter/php-cli
+        
+  nginx: 
+    image: jakmall/recruitment/cloud-engineer/counter/nginx
+    restart: unless-stopped
+    environment: 
+      - ${FASTCGI_PASS}
+    env_file:
+      - ./infrastructure/.env
+    volumes:
+      - ./public:/var/www/html/public
+    ports:
+      - ${DOCKER_COMPOSE_NGINX_HOST_PORT}:80
+      - 9000:9000
+    links:
+      - php-fpm
+      - scheduler
+      - worker
+
+  php-fpm:
+    image: jakmall/recruitment/cloud-engineer/counter/php-fpm
+    user: ${DOCKER_COMPOSE_USER}:${DOCKER_COMPOSE_USER_GROUP}
+    env_file:
+      - ./infrastructure/php/.env
+      - ./infrastructure/.env
+    volumes:
+      - ./:/var/www/html
+    command:
+      php-fpm
+    links:
+      - mysql
+      - mailhog
+      - redis
+  
+    
+  worker:
+    image: jakmall/recruitment/cloud-engineer/counter/php-cli
+    user: ${DOCKER_COMPOSE_USER}:${DOCKER_COMPOSE_USER_GROUP}
+    env_file:
+      - ./infrastructure/php/.env
+      - ./infrastructure/.env
+    volumes:
+      - ./:/var/www/html
+    command:
+      php artisan queue:work
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.workercron.schedule: "@every 60s"
+      ofelia.job-exec.workercron.command: "php artisan schedule:run"
+    links:
+      - mysql
+      - mailhog
+      - redis
+
+  scheduler:
+    image: mcuadros/ofelia:v0.3.4
+    depends_on:
+      - worker
+    command: daemon --docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+       ofelia.job-local.worker-job.schedule: "@every 60s"
+       ofelia.job-local.worker-job.command: "php artisan schedule:run"
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - ${DOCKER_COMPOSE_MAILHOG_HOST_PORT}:8025
+    env_file:
+      - ./infrastructure/.env
+
+  mysql:
+    image: mysql:8.0.23
+    command: --init-file /data/application/init.sql
+    environment: 
+       MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+       MYSQL_USER: 'counter_app'
+       MYSQL_PASSWORD: 'secret'
+       MYSQL_DATABASE: 'counter'
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./init.sql:/data/application/init.sql
+    
+  
+  redis:
+    image: redis:6.2.1-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data 
+
+  composer: 
+    image: composer:2.0.11
+    volumes:
+      - ./:/app
+ 
+volumes:
+  db-data:
+  redis-data:
+      
+
+  
+
+
+

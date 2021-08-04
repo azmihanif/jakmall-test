@@ -1,0 +1,11 @@
+.dockerignore
+.env
+.gitattributes
+.gitignore
+./bootstrap/cache/
+./docs
+./test
+./vendor
+./infrastructure
+*.md
+*.sqlite
